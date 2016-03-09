@@ -9,6 +9,48 @@ Seq					= require 'seq'
 ThruStream = require('stream').ThruStream
 
 
+deepClone = (item) ->
+	return item	unless item # null, undefined values check
+	types = [Number, String, Boolean]
+	result = undefined
+	
+	# normalizing primitives if someone did new String('aaa'), or new Number('444');
+	types.forEach (type) ->
+		result = type(item)	if item instanceof type
+
+	if typeof result is "undefined"
+		if Object::toString.call(item) is "[object Array]"
+			result = []
+			item.forEach (child, index, array) ->
+				result[index] = clone(child)
+
+		else if typeof item is "object"
+			
+			# testing that this is DOM
+			if item.nodeType and typeof item.cloneNode is "function"
+				result = item.cloneNode(true)
+			else if item.getTime
+				result = new Date(item)
+			else unless item:: # check that this is a literal
+				# it is an object literal
+				result = {}
+				for i of item
+					result[i] = clone(item[i])
+			else
+				
+				# depending what you would like here,
+				# just keep the reference, or create new object
+				if false and item.constructor
+					
+					# would not advice to do that, reason? Read below
+					result = new item.constructor()
+				else
+					result = item
+		else
+			result = item
+	return result
+
+
 formatQuery = (query)->
 	if _.isString(query)
 		query = {_id: query}
