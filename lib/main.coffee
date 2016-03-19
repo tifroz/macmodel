@@ -9,7 +9,12 @@ Seq					= require 'seq'
 ThruStream = require('stream').ThruStream
 
 
-deepClone = (item) ->
+formatQuery = (query)->
+	if _.isString(query)
+		query = {_id: query}
+	return query
+
+clone = (item) ->
 	return item	unless item # null, undefined values check
 	types = [Number, String, Boolean]
 	result = undefined
@@ -51,17 +56,14 @@ deepClone = (item) ->
 	return result
 
 
-formatQuery = (query)->
-	if _.isString(query)
-		query = {_id: query}
-	return query
-
-
 class MongoDoc extends events.EventEmitter
 	collections = {}
 	
 	@_tag: ->
 		return "MONGODOC (#{@resolveCollection().collectionName})"
+
+	@setLogger: (l)->
+		logger = l
 
 	@register: (concrete)->
 		collections[concrete.collectionName] = concrete
@@ -156,53 +158,50 @@ class MongoDoc extends events.EventEmitter
 				logger.warning util.format("#{self._tag()} query %j matched no records in collection %s", query, self.collection.collectionName)
 				fn()
 			else
-				new self(doc, {save: false}, fn)
+				fn?(null, new self(doc))
 		.catch (boo)->
 			logger.error boo
 			fn boo
+
+
 
 	##########################################################################################################
 	# 																										CONSTRUCTOR
 	#
 	# @param doc			the data object that should be wrapped by the MongoDoc instance 
-	# @param fn				(optional) callback function with (err, MongoDoc) signature, returns after the MongoDoc was instantiated
-	#	@param options 	(optional) use {save: true} to persist the new object to mongodb
+	# @param fn				(optional) callback function with (err, MongoDoc) signature, returns after the MongoDoc was instantiated.
+	# 									The object wont' be saved to storage unless the callback is passed as argument
 	##########################################################################################################
-	constructor: (doc, args...)->
-		for arg in args
-			if _.isFunction arg
-				fn = arg
-			else
-				options = arg
-
+	constructor: (doc, fn)->
+		@_needsFillFromStorage = true
 		@_modifier = {}
 		@_beforeData = {}
 		if doc
 			@_data = doc
-			if options?.save is true 
+			if _.isFunction fn 
 				self = @
 				Seq().seq ->
-					#logger.debug util.format("Saving %j to #{self.constructor.collectionName}", self._data)
+					#logger.log util.format("Saving %j to #{self.constructor.collectionName}", self._data)
 					self.save this
 				.seq ->
 					self.init()
-					fn?(null, self)
+					fn(null, self)
 				.catch (boo)->
 					logger.error boo
-					fn?(boo)
+					fn(boo)
 			else
 				@init()
-				fn?(null, @)
+
 	init: ->
 		# Implementation can override
 	
 	data: ->
-		return deepClone(@_data)
+		return clone(@_data)
 
 	save: (fn)=>
 		collection = @constructor.resolveCollection()
 		if @constructor.timelineEnabled
-			#logger.debug util.format("Saving %j to #{@constructor.collectionName}", @_data)
+			#logger.log util.format("Saving %j to #{@constructor.collectionName}", @_data)
 			@_data.timeline = 
 				created: new Date()
 				updated: new Date()
@@ -214,19 +213,29 @@ class MongoDoc extends events.EventEmitter
 		if @_data._id
 			collection.update {_id: @_data._id}, @_data, {upsert: true}, (err, res)=>
 				collection.findOne {_id: @_data._id}, (err, doc)=>
-					#logger.debug util.format("Fetched %j", doc)
-					@_data = doc
-					notify()
+					if err is null
+						@_data = doc
+						@_needsFillFromStorage = false
+						notify()
 					fn?(err, @)
 		else
 			@_data._id = db.uid()
 			collection.insert @_data, (err, res)=>
-				@_data = res[0]
-				notify()
+				if err is null
+					@_data = res[0]
+					@_needsFillFromStorage = false
+					notify()
 				fn?(err, @)
 
 		return @
 
+	##########################################################################################################
+	#
+	# setData - sets the data & save
+	#
+	# @param {Object} data	the data object that should be wrapped by the MongoDoc instance 
+	# @param fn				(optional) callback function with (err, MongoDoc) signature, returns after the doc was saved
+	##########################################################################################################
 	setData: (data, fn)=>
 		before = @_data
 		self = @
@@ -234,6 +243,7 @@ class MongoDoc extends events.EventEmitter
 			self.constructor.resolveCollection().save data, this
 		.seq ->
 			self._data = data
+			@_needsFillFromStorage = false
 			self.onUpdate before
 			#if _.isFunction self.constructor.onUpdate
 			#	process.nextTick =>
@@ -241,6 +251,40 @@ class MongoDoc extends events.EventEmitter
 			fn?(null,self)
 		.catch (boo)->
 			fn?(boo)
+
+	##########################################################################################################
+	# 		
+	# fillFromStorage - supplements the data attached to the object with data from storage
+	#
+	# @param {Object} data	the data object that should be wrapped by the MongoDoc instance 
+	# @param fn				(optional) callback function with (err, MongoDoc) signature
+	##########################################################################################################
+	fillFromStorage: (fn)=>
+		unless @_needsFillFromStorage
+			return fn?(null, @)
+		self = @
+		Seq().seq ->
+			self.constructor.fetchOne self._data, this
+		.seq (doc)->
+			if doc
+				self._data = _.extend doc.data(), self._data
+				@_needsFillFromStorage = false
+				fn?(null, self)
+			else
+				fn?(new Error("object.fillFromStorage() object has no match in the storage"))
+		.catch (boo)->
+			fn?(boo)
+
+
+
+
+	##########################################################################################################
+	# 																										extend - extends the current data object
+	#
+	# @param {Object} data	the data object that to extend the doc with
+	##########################################################################################################
+	extend: (data	)=>
+		_.extend @_data, data
 
 	jsonSerialize: (doc)->
 		return doc
@@ -250,35 +294,41 @@ class MongoDoc extends events.EventEmitter
 				process.nextTick =>
 					@constructor.onUpdate beforeData, @data()
 
+	# @method update - updates 
+	# 
+	# @param {Object} modifier, e.g. {attribute: "value"}
+	# @params {Object} options, {save: false} or {save: true}, default  is {save: true} - optional
+	# @param {Function} fn callback(e, result) - optional
 	update: (modifier, options, fn)=>
 		#Sort out optional arguments
-		args = _.toArray arguments
-		if args.length < 3
+		if options is undefined
+			options = save: true
+		else if _.isFunction options
 			fn = options
-			options = null
+			options = save: true
+
 		if _.size(@_modifier) is 0
 			@_beforeData = @_data
-		_.extend @_modifier, modifier
+		modifier = _.extend {}, @_modifier, modifier
 
 		unless options?.save is false
 			if id = @_data._id
 				self = @
 				if @constructor.timelineEnabled
-					$setModifier = @_modifier["$set"] or {}
+					$setModifier = modifier["$set"] or {}
 					$setModifier["timeline.updated"] = new Date()
-					@_modifier["$set"] = $setModifier
-				#logger.debug util.format("#{self.constructor._tag()} update modifier: %j", @_modifier)
-				modif = @_modifier
+					modifier["$set"] = $setModifier
+				logger.log util.format("#{self.constructor._tag()} update modifier: %j", modifier)
+
 				before = @_beforeData
-				@_modifier = {}
 				@_beforeData = {}
-				@constructor.resolveCollection().findAndModify {_id: id}, [["_id", 1]], modif, {'new': true}, (err, res)=>
+				@constructor.resolveCollection().findAndModify {_id: id}, [["_id", 1]], modifier, {'new': true}, (err, res)=>
 					if err
-						logger.error util.format("ERROR Failed to 'findAndModify' #{self.constructor._tag()} with modifier %j, selector (%j)", modif, {_id: id})
+						logger.error util.format("ERROR Failed to 'findAndModify' #{self.constructor._tag()} with modifier %j, selector (%j)", modifier, {_id: id})
 						logger.error err
 					else
-						#logger.debug util.format("#{self.constructor._tag()} with id #{id} was updated as %j", res)
 						@_data = res
+						@_needsFillFromStorage = false
 						if _.isFunction @constructor.onUpdate
 							process.nextTick =>
 								@constructor.onUpdate before, @data()
@@ -286,7 +336,6 @@ class MongoDoc extends events.EventEmitter
 			else
 				err = new Error("#{self.constructor._tag()} Can't update a record not already in the db") 
 				fn?(err)
-				throw err
 		return @
 
 	remove: (fn=(->))=>

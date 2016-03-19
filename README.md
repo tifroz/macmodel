@@ -67,14 +67,15 @@ MongoDoc.register(Account)
 	##########################################################################################################
 
 
-	# 	CONSTRUCTOR: account = new Account(doc, fn, options)
+
+	# 																										CONSTRUCTOR
 	#
 	# @param doc			the data object that should be wrapped by the MongoDoc instance 
-	# @param fn				(optional) callback function with (err, MongoDoc) signature, returns after the MongoDoc was instantiated
-	#	@param options 	(optional) use {save: true} to persist the new object to mongodb
-	#
-	# Note: subclass implementation can override init()
-
+	# @param fn				(optional) callback function with (err, MongoDoc) signature, returns after the MongoDoc was instantiated.
+	# 									The object wont' be saved to storage unless the callback is passed as argument
+account = new Account doc, (err, doc)->
+	if doc
+		console.log "OK created and saved"
 
 
 
@@ -87,7 +88,7 @@ MongoDoc.register(Account)
 	# @param fn					callback with (error, MongoDocs<Array>) signature
 	#
 	# @return a mongodb stream that can be iterated over
-
+Account.fetch(query, options, fn)
 
 
 	#			FETCHONE to fetch the first match: Account.fetchOne(query, options, fn)
@@ -99,17 +100,39 @@ MongoDoc.register(Account)
 	# @param fn					callback with (error, MongoDoc) signature
 	#
 	# @return N/A
-
+Account.fetchOne(query, options, fn)
 
 	##########################################################################################################
 	#																											Instance APIs
 	##########################################################################################################
 
 	# 
-	# account.save()
-	# account.setData(data, fn)
-	# account.update(modifier, options, fn)
-	# account.remove()
+
+# Supplements known data with data from the storage (this assumes a matching object exists in the storage)
+account = new Account(_id: '123')
+account.fillFromStorage, (err, doc)->
+	if err
+		console.error "No matching object found?"
+	else
+		account.getData() # This should yield not just the _id but also all the data we could fetch from the storage 
+
+# Save current data object to mongodb
+account.save(fn)
+
+# Attach a new set of data and save
+account.setData(data, fn)
+
+# Extends current data object (does not save)
+account.extend(data)
+
+# Update data in storage
+account.update(modifier, options, fn)
+
+# Remove from storage
+account.remove()
+
+# Get a copy of the data object attached to the instance
+account.data()
 
 
 ```
