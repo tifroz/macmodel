@@ -68,39 +68,43 @@ MongoDoc.register(Account)
 
 
 
-	# 																										CONSTRUCTOR
-	#
-	# @param doc			the data object that should be wrapped by the MongoDoc instance 
-	# @param fn				(optional) callback function with (err, MongoDoc) signature, returns after the MongoDoc was instantiated.
-	# 									The object wont' be saved to storage unless the callback is passed as argument
+# Constructor()
+
+# @param doc			the data object that should be wrapped by the MongoDoc instance 
+# @param fn				(optional) callback function with (err, MongoDoc) signature, returns after the MongoDoc was instantiated.
+# 									The object wont' be saved to storage unless the callback is passed as argument
 account = new Account doc, (err, doc)->
 	if doc
 		console.log "OK created and saved"
 
 
 
-	# 		FETCH to fetch all matches: Account.fetch(query, options, fn)
-	# 
-	# @see http://mongodb.github.io/node-mongodb-native/api-generated/collection.html#find
-	#
-	# @param query			mongodb query object e.g {color: 'blue'}, see 
-	# @param options		(optional) mongodb options object e.g. {fields: {color: true}}
-	# @param fn					callback with (error, MongoDocs<Array>) signature
-	#
-	# @return a mongodb stream that can be iterated over
+# fetch() to fetch all matches: Account.fetch(query, options, fn)
+
+# @see http://mongodb.github.io/node-mongodb-native/api-generated/collection.html#find
+#
+# @param query			mongodb query object e.g {color: 'blue'}, see 
+# @param options		(optional) mongodb options object e.g. {fields: {color: true}}
+# @param fn					callback with (error, MongoDocs<Array>) signature
+#
+# @return a mongodb stream that can be iterated over
 Account.fetch(query, options, fn)
 
 
-	#			FETCHONE to fetch the first match: Account.fetchOne(query, options, fn)
-	# 
-	# @see http://mongodb.github.io/node-mongodb-native/api-generated/collection.html#find
-	#
-	# @param query			mongodb query object e.g {color: 'blue'}, see 
-	# @param options		mongodb options object e.g. {fields: {color: true}}
-	# @param fn					callback with (error, MongoDoc) signature
-	#
-	# @return N/A
+# fetchOne() fetches the first match: Account.fetchOne(query, options, fn)
+
+# @see http://mongodb.github.io/node-mongodb-native/api-generated/collection.html#find
+#
+# @param query			mongodb query object e.g {color: 'blue'}, see 
+# @param options		mongodb options object e.g. {fields: {color: true}}
+# @param fn					callback with (error, MongoDoc) signature
+#
+# @return N/A
 Account.fetchOne(query, options, fn)
+
+# The db.property maps to the underlying macmongo instance 
+
+Account.db
 
 	##########################################################################################################
 	#																											Instance APIs

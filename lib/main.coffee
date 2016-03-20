@@ -61,6 +61,8 @@ class MongoDoc extends events.EventEmitter
 	
 	@_tag: ->
 		return "MONGODOC (#{@resolveCollection().collectionName})"
+	
+	@db : db
 
 	@setLogger: (l)->
 		logger = l
