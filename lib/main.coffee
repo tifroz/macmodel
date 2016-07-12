@@ -77,7 +77,7 @@ class MongoDoc extends events.EventEmitter
 	@concreteClass: (collectionName)->
 		concrete = collections[collectionName]
 		if not concrete
-			logger.warning "Could not find concrete MongoDoc instance for '#{collectionName}'. Make sure it was registered first?"
+			logger.warn "Could not find concrete MongoDoc instance for '#{collectionName}'. Make sure it was registered first?"
 		return concrete
 
 	@instanceForCollection: (collectionName, doc, options, fn)->
@@ -157,7 +157,7 @@ class MongoDoc extends events.EventEmitter
 			self.resolveCollection().findOne formatQuery(query), options, this
 		.seq (doc)->
 			if not doc
-				logger.warning util.format("#{self._tag()} query %j matched no records in collection %s", query, self.collection.collectionName)
+				logger.warn util.format("#{self._tag()} query %j matched no records in collection %s", query, self.collection.collectionName)
 				fn()
 			else
 				fn?(null, new self(doc))
