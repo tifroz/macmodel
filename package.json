@@ -4,7 +4,7 @@
   },
   "name": "macmodel",
   "description": "model generation helper for macmongo",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "private": false,
   "license" : "UNLICENSED",
   "main": "lib/main",
