@@ -9,8 +9,8 @@
   "license" : "UNLICENSED",
   "main": "lib/main",
   "dependencies": {
-  	"underscore": "1.7.x",
-    "seq": "0.3.x",
+  	"underscore": "^1.12.1",
+    "seq": "^0.3.5",
     "macmongo": "tifroz/macmongo"
   },
   "devDependencies": {}
